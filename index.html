@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@mraprguildbot - Gemini AI Training Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .features {
+            list-style: none;
+        }
+        
+        .features li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .features li:last-child {
+            border-bottom: none;
+        }
+        
+        .features li:before {
+            content: '✓';
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .endpoints {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .endpoint {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .endpoint:last-child {
+            border-bottom: none;
+        }
+        
+        .endpoint-url {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+        
+        .version {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 @mraprguildbot</h1>
+            <p>Gemini AI Training Assistant</p>
+            <span class="version">v1.0.0</span>
+        </div>
+        
+        <div class="cards">
+            <div class="card">
+                <h3>🚀 Service Status</h3>
+                <div class="status">
+                    <div class="status-dot"></div>
+                    <span>Bot Online & Ready</span>
+                </div>
+                <div class="status">
+                    <div class="status-dot"></div>
+                    <span>Gemini AI Connected</span>
+                </div>
+                <div class="status">
+                    <div class="status-dot"></div>
+                    <span>Webhook Enabled</span>
+                </div>
+                <div style="margin-top: 20px;">
+                    <a href="/health" class="btn">Check Health</a>
+                    <a href="/ping" class="btn">Ping Service</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>✨ Features</h3>
+                <ul class="features">
+                    <li>Private chat support</li>
+                    <li>Group chat assistance</li>
+                    <li>Programming training</li>
+                    <li>Google Gemini AI integration</li>
+                    <li>Smart response triggers</li>
+                    <li>Context-aware conversations</li>
+                    <li>Educational responses</li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h3>📡 API Endpoints</h3>
+                <div class="endpoints">
+                    <div class="endpoint">
+                        <span>Health Check</span>
+                        <span class="endpoint-url">/health</span>
+                    </div>
+                    <div class="endpoint">
+                        <span>Simple Ping</span>
+                        <span class="endpoint-url">/ping</span>
+                    </div>
+                    <div class="endpoint">
+                        <span>Readiness Probe</span>
+                        <span class="endpoint-url">/ready</span>
+                    </div>
+                    <div class="endpoint">
+                        <span>Webhook</span>
+                        <span class="endpoint-url">/webhook</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>💬 How to Use</h3>
+                <p style="margin-bottom: 15px;"><strong>Private Chats:</strong></p>
+                <ul style="margin-bottom: 20px; padding-left: 20px;">
+                    <li>Send any message directly to the bot</li>
+                    <li>Ask programming questions</li>
+                    <li>Get coding help and explanations</li>
+                </ul>
+                
+                <p style="margin-bottom: 15px;"><strong>Group Chats:</strong></p>
+                <ul style="padding-left: 20px;">
+                    <li>Mention @mraprguildbot</li>
+                    <li>Reply to bot messages</li>
+                    <li>Use trigger words (hi, help, question)</li>
+                    <li>Ask questions ending with ?</li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h3>🐳 Deployment</h3>
+                <p style="margin-bottom: 15px;"><strong>Platform:</strong> Render.com</p>
+                <p style="margin-bottom: 15px;"><strong>Container:</strong> Docker Ready</p>
+                <p style="margin-bottom: 15px;"><strong>Monitoring:</strong> Full Health Checks</p>
+                <p style="margin-bottom: 15px;"><strong>Port:</strong> 5000</p>
+                <p><strong>Environment:</strong> Production</p>
+            </div>
+            
+            <div class="card">
+                <h3>🔧 Technical Stack</h3>
+                <ul class="features">
+                    <li>Python 3.11</li>
+                    <li>Flask Web Server</li>
+                    <li>Google Gemini AI API</li>
+                    <li>Telegram Bot API</li>
+                    <li>Docker Container</li>
+                    <li>Webhook Architecture</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by Google Gemini AI | Built for Programming Training & Education</p>
+            <p style="font-size: 0.9rem; margin-top: 10px;">
+                Ready for Render.com deployment with comprehensive monitoring
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        // Simple status check
+        async function checkStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                console.log('Health check:', data);
+            } catch (error) {
+                console.error('Health check failed:', error);
+            }
+        }
+        
+        // Check status on page load
+        checkStatus();
+        
+        // Auto-refresh status every 30 seconds
+        setInterval(checkStatus, 30000);
+    </script>
+</body>
+</html>
