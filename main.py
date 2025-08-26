@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 """
 Main entry point for the Telegram Gemini AI Bot
-Runs bot with polling as primary method, webhook as secondary option
+Simplified for polling mode (development/local deployment)
 """
 
 import os
@@ -19,75 +20,111 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def run_flask_app(app, config):
-    """Run Flask app in a separate thread"""
-    import logging
-    log = logging.getLogger('werkzeug')
-    log.setLevel(logging.WARNING)  # Reduce Flask logging noise
-    
-    logger.info(f"Starting Flask server on {config.HOST}:{config.PORT}")
-    app.run(
-        host=config.HOST,
-        port=config.PORT,
-        debug=False,
-        use_reloader=False,
-        threaded=True
-    )
+# Initialize Flask app for health checks and optional API endpoints
+app = Flask(__name__)
 
-async def setup_webhook_if_needed(bot, config):
-    """Setup webhook only if WEBHOOK_URL is provided"""
-    if config.WEBHOOK_URL:
-        try:
-            webhook_url = f"{config.WEBHOOK_URL}/webhook"
-            await bot.application.bot.set_webhook(
-                url=webhook_url,
-                allowed_updates=["message", "callback_query"]
-            )
-            logger.info(f"Webhook configured: {webhook_url}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to set webhook: {e}")
-            return False
-    return False
+# Initialize bot
+config = Config()
+telegram_bot = TelegramGeminiBot(config)
 
-def main():
-    """Main function to run the bot"""
-    # Initialize configuration
-    config = Config()
-    
-    # Initialize bot
-    telegram_bot = TelegramGeminiBot(config)
-    
-    # Create Flask app for health monitoring and optional webhooks
-    app = Flask(__name__)
-    web_server = WebServer(app, telegram_bot, config)
-    
-    # Start Flask server in background thread for health monitoring
-    flask_thread = threading.Thread(
-        target=run_flask_app, 
-        args=(app, config), 
-        daemon=True
-    )
-    flask_thread.start()
-    
-    # Check if webhook should be configured
-    if config.WEBHOOK_URL:
-        logger.info("Webhook URL provided but using polling as primary method per user request")
-    
-    logger.info("Bot running with polling mode (primary method)")
-    
-    # Run with polling - no async event loop conflicts
-    telegram_bot.application.run_polling(
-        poll_interval=2.0,
-        timeout=20,
-        drop_pending_updates=True
-    )
-
-if __name__ == "__main__":
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring"""
     try:
-        main()
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        bot_status = 'healthy' if telegram_bot and telegram_bot.application else 'unhealthy'
+        
+        return jsonify({
+            'status': 'healthy',
+            'service': '@mraprguildbot - Gemini AI Training Assistant',
+            'version': '1.0.0',
+            'bot_status': bot_status,
+            'mode': 'polling',
+            'environment': config.ENVIRONMENT,
+        }), 200
     except Exception as e:
-        logger.error(f"Bot crashed: {e}")
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    """Simple ping endpoint for monitoring services"""
+    return jsonify({'pong': True, 'mode': 'polling'}), 200
+
+@app.route('/', methods=['GET'])
+def home():
+    """Root endpoint with bot information"""
+    try:
+        return render_template('index.html')
+    except:
+        # Fallback to JSON response if template fails
+        return jsonify({
+            'service': '@mraprguildbot - Gemini AI Training Assistant',
+            'description': 'A specialized Telegram bot providing programming training and technical education assistance',
+            'status': 'running',
+            'mode': 'polling',
+            'version': '1.0.0',
+            'features': [
+                'Private chat support',
+                'Group chat assistance', 
+                'Programming training',
+                'Google Gemini AI integration',
+                'Smart response triggers'
+            ],
+            'endpoints': {
+                'health': '/health - Health check',
+                'ping': '/ping - Simple ping response'
+            }
+        })
+
+@app.route('/api', methods=['GET'])
+def api_info():
+    """API endpoint with JSON bot information"""
+    return jsonify({
+        'service': '@mraprguildbot - Gemini AI Training Assistant',
+        'mode': 'polling',
+        'status': 'running',
+        'version': '1.0.0'
+    })
+
+def run_bot_polling():
+    """Run the bot in polling mode"""
+    logger.info("Starting bot in polling mode")
+    try:
+        telegram_bot.application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
+    except Exception as e:
+        logger.error(f"Bot polling failed: {e}")
         raise
+
+def run_flask_server():
+    """Run Flask server for health checks"""
+    port = int(os.environ.get('PORT', 5000))
+    logger.info(f"Starting Flask health check server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+if __name__ == '__main__':
+    if config.ENVIRONMENT == 'production':
+        logger.warning("Running in production mode with polling - consider using webhooks for production")
+    
+    # For simplicity, we'll run the bot polling in the main thread
+    # and Flask server in a separate thread if needed, or just run bot polling
+    # since health checks might not be necessary for local development
+    
+    if os.environ.get('RUN_FLASK', 'false').lower() == 'true':
+        # Run both bot and Flask server (requires threading)
+        import threading
+        
+        flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+        flask_thread.start()
+        
+        logger.info("Flask server started in background thread")
+        run_bot_polling()
+    else:
+        # Just run the bot polling (simpler for development)
+        logger.info("Starting bot polling (Flask server not started)")
+        run_bot_polling()
