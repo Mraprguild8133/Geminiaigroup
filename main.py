@@ -3,13 +3,14 @@ Main entry point for the Telegram Gemini AI Bot
 Runs bot with polling as primary method, webhook as secondary option
 """
 
+import os
 import logging
+from flask import Flask, request, jsonify, render_template
+from telegram import Update
+from telegram.ext import Application
 import asyncio
-import threading
-from flask import Flask
-from config import Config
 from bot import TelegramGeminiBot
-from web_server import WebServer
+from config import Config
 
 # Configure logging
 logging.basicConfig(
