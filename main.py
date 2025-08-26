@@ -177,7 +177,7 @@ async def setup_webhook():
         raise
 
 def run_development():
-    """Run bot in production mode with Flask server (bot runs via separate workflow)"""
+    """Run bot in development mode with Flask server (bot runs via separate workflow)"""
     # In development mode, just run Flask server
     # Bot can be run separately via the workflow system
     port = int(os.environ.get('PORT', 5000))
@@ -187,12 +187,12 @@ def run_development():
 
 def run_bot_only():
     """Run just the bot polling (for workflow system)"""
-    logger.info("Starting bot in production mode (polling)")
+    logger.info("Starting bot in development mode (polling)")
     telegram_bot.application.run_polling(drop_pending_updates=True)
 
 async def run_production():
     """Initialize bot for production mode (webhook)"""
-    logger.info("Initializing bot for production mode (bot)")
+    logger.info("Initializing bot for production mode (webhook)")
     
     # Initialize the application
     await telegram_bot.application.initialize()
