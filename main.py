@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
 Main entry point for the Telegram Gemini AI Bot
-Handles webhook setup and Flask server for Render.com deployment
+Production-focused with webhook support for Render.com deployment
 """
 
 import os
 import logging
-from flask import Flask, request, jsonify, render_template
+import asyncio
+import signal
+from functools import wraps
+
+from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import Application
-import asyncio
+
 from bot import TelegramGeminiBot
 from config import Config
 
@@ -20,28 +24,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Flask app for webhook and health checks
+# Initialize configuration
+config = Config()
+
+# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize bot
-config = Config()
-telegram_bot = TelegramGeminiBot(config)
+# Global bot instance (will be initialized in main)
+telegram_bot = None
+application = None
+
+def async_action(f):
+    """Decorator to allow async functions to be called as Flask endpoints"""
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        return asyncio.run(f(*args, **kwargs))
+    return wrapped
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint for Render.com monitoring"""
     try:
-        # Check if bot application is initialized
-        bot_status = 'healthy' if telegram_bot and telegram_bot.application else 'unhealthy'
+        bot_healthy = telegram_bot is not None and application is not None
+        status = 'healthy' if bot_healthy else 'unhealthy'
         
         return jsonify({
-            'status': 'healthy',
+            'status': status,
             'service': '@mraprguildbot - Gemini AI Training Assistant',
             'version': '1.0.0',
-            'bot_status': bot_status,
+            'bot_initialized': telegram_bot is not None,
+            'application_initialized': application is not None,
             'environment': config.ENVIRONMENT,
-            'timestamp': str(asyncio.get_event_loop().time() if hasattr(asyncio, 'get_event_loop') else 'N/A')
-        }), 200
+        }), 200 if bot_healthy else 503
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return jsonify({
@@ -49,47 +63,25 @@ def health_check():
             'error': str(e)
         }), 500
 
-@app.route('/ping', methods=['GET'])
-def ping():
-    """Simple ping endpoint for monitoring services"""
-    return jsonify({'pong': True}), 200
-
-@app.route('/ready', methods=['GET'])
-def readiness_check():
-    """Readiness check for container orchestration"""
-    try:
-        # Check if all components are ready
-        ready = telegram_bot and telegram_bot.application and telegram_bot.gemini_service
-        
-        return jsonify({
-            'ready': bool(ready),
-            'service': '@mraprguildbot',
-            'components': {
-                'telegram_bot': bool(telegram_bot),
-                'application': bool(telegram_bot.application if telegram_bot else False),
-                'gemini_service': bool(telegram_bot.gemini_service if telegram_bot else False)
-            }
-        }), 200 if ready else 503
-    except Exception as e:
-        logger.error(f"Readiness check failed: {e}")
-        return jsonify({
-            'ready': False,
-            'error': str(e)
-        }), 503
-
 @app.route('/webhook', methods=['POST'])
-def webhook():
-    """Telegram webhook endpoint"""
+@async_action
+async def webhook():
+    """Telegram webhook endpoint with async support"""
     try:
+        if telegram_bot is None or application is None:
+            logger.error("Bot not initialized")
+            return jsonify({'status': 'error', 'message': 'Bot not initialized'}), 500
+            
         json_data = request.get_json()
         if not json_data:
             logger.warning("Received empty webhook data")
             return jsonify({'status': 'error', 'message': 'No data received'}), 400
         
-        # Process update asynchronously
-        update = Update.de_json(json_data, telegram_bot.application.bot)
+        # Process update
+        update = Update.de_json(json_data, application.bot)
         if update:
-            asyncio.create_task(telegram_bot.application.process_update(update))
+            # Process the update asynchronously
+            asyncio.create_task(application.process_update(update))
             return jsonify({'status': 'ok'}), 200
         else:
             logger.warning("Failed to parse update from webhook data")
@@ -101,63 +93,13 @@ def webhook():
 
 @app.route('/', methods=['GET'])
 def home():
-    """Root endpoint with bot dashboard"""
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        logger.error(f"Error serving dashboard: {e}")
-        # Fallback to JSON response if template fails
-        return jsonify({
-            'service': '@mraprguildbot - Gemini AI Training Assistant',
-            'description': 'A specialized Telegram bot providing programming training and technical education assistance',
-            'status': 'running',
-            'version': '1.0.0',
-            'features': [
-                'Private chat support',
-                'Group chat assistance', 
-                'Programming training',
-                'Google Gemini AI integration',
-                'Smart response triggers'
-            ],
-            'endpoints': {
-                'health': '/health - Comprehensive health check',
-                'ping': '/ping - Simple ping response',
-                'ready': '/ready - Readiness probe for containers',
-                'webhook': '/webhook - Telegram webhook endpoint'
-            },
-            'deployment': {
-                'platform': 'Render.com',
-                'container': 'Docker ready',
-                'monitoring': 'Full health checks enabled'
-            }
-        })
-
-@app.route('/api', methods=['GET'])
-def api_info():
-    """API endpoint with JSON bot information"""
+    """Root endpoint with bot information"""
     return jsonify({
         'service': '@mraprguildbot - Gemini AI Training Assistant',
         'description': 'A specialized Telegram bot providing programming training and technical education assistance',
-        'status': 'running',
-        'version': '1.0.0',
-        'features': [
-            'Private chat support',
-            'Group chat assistance', 
-            'Programming training',
-            'Google Gemini AI integration',
-            'Smart response triggers'
-        ],
-        'endpoints': {
-            'health': '/health - Comprehensive health check',
-            'ping': '/ping - Simple ping response',
-            'ready': '/ready - Readiness probe for containers',
-            'webhook': '/webhook - Telegram webhook endpoint'
-        },
-        'deployment': {
-            'platform': 'Render.com',
-            'container': 'Docker ready',
-            'monitoring': 'Full health checks enabled'
-        }
+        'status': 'running' if telegram_bot else 'initializing',
+        'mode': 'webhook' if config.ENVIRONMENT == 'production' else 'polling',
+        'version': '1.0.0'
     })
 
 async def setup_webhook():
@@ -166,9 +108,10 @@ async def setup_webhook():
         webhook_url = f"{config.WEBHOOK_URL}/webhook"
         logger.info(f"Setting up webhook: {webhook_url}")
         
-        await telegram_bot.application.bot.set_webhook(
+        await application.bot.set_webhook(
             url=webhook_url,
-            drop_pending_updates=True
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query"]
         )
         logger.info("Webhook setup completed successfully")
         
@@ -176,50 +119,109 @@ async def setup_webhook():
         logger.error(f"Failed to setup webhook: {e}")
         raise
 
-def run_development():
-    """Run bot in development mode with Flask server (bot runs via separate workflow)"""
-    # In development mode, just run Flask server
-    # Bot can be run separately via the workflow system
+async def run_polling():
+    """Run bot in polling mode"""
+    logger.info("Starting bot in polling mode")
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"]
+    )
+    logger.info("Bot polling started")
+
+async def run_webhook():
+    """Run bot in webhook mode"""
+    logger.info("Starting bot in webhook mode")
+    await application.initialize()
+    await application.start()
+    await setup_webhook()
+    logger.info("Bot webhook mode started")
+
+async def shutdown():
+    """Graceful shutdown"""
+    logger.info("Shutting down bot...")
+    if application:
+        await application.stop()
+        await application.shutdown()
+    logger.info("Bot shutdown completed")
+
+def handle_shutdown(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"Received signal {signum}, shutting down...")
+    asyncio.create_task(shutdown())
+
+async def main():
+    """Main async function to initialize and run the bot"""
+    global telegram_bot, application
+    
+    try:
+        # Initialize bot
+        telegram_bot = TelegramGeminiBot(config)
+        application = telegram_bot.application
+        
+        # Register signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, handle_shutdown)
+        signal.signal(signal.SIGTERM, handle_shutdown)
+        
+        # Start the bot based on environment
+        if config.ENVIRONMENT == 'production':
+            await run_webhook()
+        else:
+            await run_polling()
+            
+        logger.info("Bot started successfully")
+        
+        # For production, we return here and let Flask run separately
+        if config.ENVIRONMENT == 'production':
+            return
+            
+        # For development (polling), keep the event loop running
+        while True:
+            await asyncio.sleep(3600)  # Sleep for 1 hour
+            
+    except Exception as e:
+        logger.error(f"Failed to start bot: {e}")
+        await shutdown()
+        raise
+
+def run_flask():
+    """Run the Flask server"""
     port = int(os.environ.get('PORT', 5000))
-    logger.info(f"Starting Flask web server on port {port}")
-    logger.info("Bot polling should be started via workflow system for concurrent operation")
+    logger.info(f"Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-def run_bot_only():
-    """Run just the bot polling (for workflow system)"""
-    logger.info("Starting bot in development mode (polling)")
-    telegram_bot.application.run_polling(drop_pending_updates=True)
-
-async def run_production():
-    """Initialize bot for production mode (webhook)"""
-    logger.info("Initializing bot for production mode (webhook)")
-    
-    # Initialize the application
-    await telegram_bot.application.initialize()
-    await telegram_bot.application.start()
-    
-    # Setup webhook
-    await setup_webhook()
-    
-    logger.info("Bot initialized and webhook configured")
-
 if __name__ == '__main__':
-    if config.ENVIRONMENT == 'development':
-        # Development mode - use polling
-        run_development()
-    else:
-        # Production mode - setup webhook and run Flask server
+    if config.ENVIRONMENT == 'production':
+        # Production: Run both bot and Flask in the same event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Start the bot
+        bot_task = loop.create_task(main())
+        
+        # Run Flask in the same event loop
         try:
-            # Run async setup
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(run_production())
+            # Use a thread for Flask to avoid blocking
+            import threading
+            flask_thread = threading.Thread(target=run_flask, daemon=True)
+            flask_thread.start()
             
-            # Start Flask server
-            port = int(os.environ.get('PORT', 5000))
-            logger.info(f"Starting Flask server on port {port}")
-            app.run(host='0.0.0.0', port=port, debug=False)
-            
-        except Exception as e:
-            logger.error(f"Failed to start production server: {e}")
-            raise
+            # Run the event loop
+            loop.run_until_complete(bot_task)
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt, shutting down...")
+        finally:
+            loop.run_until_complete(shutdown())
+            loop.close()
+    else:
+        # Development: Just run polling (Flask can be run separately if needed)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(main())
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt, shutting down...")
+        finally:
+            loop.run_until_complete(shutdown())
+            loop.close()
