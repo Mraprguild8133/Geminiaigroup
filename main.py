@@ -6,6 +6,7 @@ Simplified for polling mode (development/local deployment)
 
 import os
 import logging
+import socket
 from flask import Flask, request, jsonify, render_template
 from telegram import Update
 from telegram.ext import Application
@@ -26,6 +27,15 @@ app = Flask(__name__)
 # Initialize bot
 config = Config()
 telegram_bot = TelegramGeminiBot(config)
+
+def is_port_in_use(port):
+    """Check if a port is already in use"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('0.0.0.0', port))
+            return False
+        except socket.error:
+            return True
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -113,15 +123,33 @@ def run_bot_polling():
         raise
 
 def run_flask_server():
-    """Run Flask server for health checks"""
+    """Run Flask server for health checks with port handling"""
     port = int(os.environ.get('PORT', 5000))
+    
+    # Check if port is available
+    if is_port_in_use(port):
+        logger.warning(f"Port {port} is already in use, trying to find alternative port...")
+        # Try alternative ports
+        for alternative_port in [port + 1, port + 2, port + 3, 8080, 3000]:
+            if not is_port_in_use(alternative_port):
+                port = alternative_port
+                logger.info(f"Using alternative port: {port}")
+                break
+        else:
+            logger.error("No available ports found for Flask server")
+            return
+    
     logger.info(f"Starting Flask health check server on port {port}")
     logger.info(f"Health check available at: http://0.0.0.0:{port}/health")
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    
+    try:
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False, threaded=True)
+    except Exception as e:
+        logger.error(f"Flask server failed to start: {e}")
 
 if __name__ == '__main__':
     # Get environment variables
-    run_flask = os.environ.get('RUN_FLASK', 'false').lower() == 'true'
+    run_flask = os.environ.get('RUN_FLASK', 'true').lower() == 'true'
     port = int(os.environ.get('PORT', 5000))
     environment = config.ENVIRONMENT
     
@@ -140,7 +168,7 @@ if __name__ == '__main__':
         flask_thread.start()
         
         logger.info("Flask server started in background thread")
-        logger.info(f"Health endpoints available on port {port}")
+        logger.info("Starting bot polling...")
         run_bot_polling()
     else:
         # Just run the bot polling (simpler for development)
