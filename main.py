@@ -40,6 +40,8 @@ def health_check():
             'bot_status': bot_status,
             'mode': 'polling',
             'environment': config.ENVIRONMENT,
+            'flask_server': os.environ.get('RUN_FLASK', 'false').lower() == 'true',
+            'port': int(os.environ.get('PORT', 5000))
         }), 200
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -51,7 +53,12 @@ def health_check():
 @app.route('/ping', methods=['GET'])
 def ping():
     """Simple ping endpoint for monitoring services"""
-    return jsonify({'pong': True, 'mode': 'polling'}), 200
+    return jsonify({
+        'pong': True, 
+        'mode': 'polling',
+        'flask_server': os.environ.get('RUN_FLASK', 'false').lower() == 'true',
+        'port': int(os.environ.get('PORT', 5000))
+    }), 200
 
 @app.route('/', methods=['GET'])
 def home():
@@ -66,6 +73,8 @@ def home():
             'status': 'running',
             'mode': 'polling',
             'version': '1.0.0',
+            'flask_server': os.environ.get('RUN_FLASK', 'false').lower() == 'true',
+            'port': int(os.environ.get('PORT', 5000)),
             'features': [
                 'Private chat support',
                 'Group chat assistance', 
@@ -86,7 +95,9 @@ def api_info():
         'service': '@mraprguildbot - Gemini AI Training Assistant',
         'mode': 'polling',
         'status': 'running',
-        'version': '1.0.0'
+        'version': '1.0.0',
+        'flask_server': os.environ.get('RUN_FLASK', 'false').lower() == 'true',
+        'port': int(os.environ.get('PORT', 5000))
     })
 
 def run_bot_polling():
@@ -105,26 +116,34 @@ def run_flask_server():
     """Run Flask server for health checks"""
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"Starting Flask health check server on port {port}")
+    logger.info(f"Health check available at: http://0.0.0.0:{port}/health")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 if __name__ == '__main__':
-    if config.ENVIRONMENT == 'production':
+    # Get environment variables
+    run_flask = os.environ.get('RUN_FLASK', 'false').lower() == 'true'
+    port = int(os.environ.get('PORT', 5000))
+    environment = config.ENVIRONMENT
+    
+    logger.info(f"Starting in {environment} mode")
+    logger.info(f"RUN_FLASK: {run_flask}")
+    logger.info(f"PORT: {port}")
+    
+    if environment == 'production':
         logger.warning("Running in production mode with polling - consider using webhooks for production")
     
-    # For simplicity, we'll run the bot polling in the main thread
-    # and Flask server in a separate thread if needed, or just run bot polling
-    # since health checks might not be necessary for local development
-    
-    if os.environ.get('RUN_FLASK', 'false').lower() == 'true':
-        # Run both bot and Flask server (requires threading)
+    if run_flask:
+        # Run both bot and Flask server using threading
         import threading
         
         flask_thread = threading.Thread(target=run_flask_server, daemon=True)
         flask_thread.start()
         
         logger.info("Flask server started in background thread")
+        logger.info(f"Health endpoints available on port {port}")
         run_bot_polling()
     else:
         # Just run the bot polling (simpler for development)
-        logger.info("Starting bot polling (Flask server not started)")
+        logger.info("Starting bot polling only (Flask server disabled)")
+        logger.info("Set RUN_FLASK=true to enable health check server")
         run_bot_polling()
